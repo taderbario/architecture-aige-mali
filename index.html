@@ -1,0 +1,538 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Architecture AIGE - Vues Interactives</title>
+    <style>
+        /* --- THÈME GLOBAL --- */
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #1a1a1a;
+            margin: 0;
+            padding: 0;
+            color: #d4d4d4;
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            overflow: hidden; /* Zéro défilement */
+            user-select: none;
+        }
+
+        /* --- EN-TÊTE FIXE & NAVIGATION --- */
+        .header {
+            background-color: #252526;
+            padding: 10px 30px;
+            border-bottom: 1px solid #333;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.5);
+            z-index: 10;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .header-title h1 { margin: 0; font-size: 18px; font-weight: 500; color: #ffffff; }
+        .header-title p { margin: 2px 0 0 0; font-size: 12px; color: #858585; }
+        
+        /* Boutons de bascule */
+        .nav-buttons {
+            display: flex;
+            gap: 15px;
+        }
+        .nav-btn {
+            background-color: #1e1e1e;
+            color: #a3a3a3;
+            border: 1px solid #444;
+            padding: 8px 20px;
+            border-radius: 20px;
+            font-size: 13px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        .nav-btn:hover { background-color: #333; color: #fff; }
+        .nav-btn.active {
+            background-color: #3b82f6;
+            color: #fff;
+            border-color: #2563eb;
+            box-shadow: 0 0 15px rgba(59, 130, 246, 0.4);
+        }
+
+        /* --- ESPACE DE TRAVAIL (CANVAS) --- */
+        .workspace-wrapper {
+            flex-grow: 1;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background-color: #202020;
+        }
+        .workspace {
+            position: relative;
+            width: 1300px; /* Grand Espace */
+            height: 600px;
+            background-image: 
+                radial-gradient(#2a2a2a 1px, transparent 1px),
+                radial-gradient(#2a2a2a 1px, transparent 1px);
+            background-size: 40px 40px;
+            background-position: 0 0, 20px 20px;
+            border-radius: 15px;
+            box-shadow: inset 0 0 60px rgba(0,0,0,0.6);
+        }
+
+        /* --- CÂBLES SVG --- */
+        svg.cables {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 1; pointer-events: none;
+        }
+        .cable {
+            fill: none; stroke-width: 2.5px; stroke-linecap: round; opacity: 0.85; stroke-dasharray: 8;
+            animation: dash 25s linear infinite;
+        }
+        @keyframes dash { to { stroke-dashoffset: -1000; } }
+        
+        .cable-text { font-size: 11.5px; font-weight: bold; fill: #ffffff; letter-spacing: 0.5px; }
+        .cable-subtext { font-size: 11px; fill: #94a3b8; font-style: italic; }
+
+        /* --- ZONES (Pour la vue Architecture) --- */
+        .zone-box {
+            position: absolute;
+            border: 1px dashed #555;
+            background-color: rgba(255, 255, 255, 0.015);
+            border-radius: 12px;
+            z-index: 0;
+            pointer-events: none;
+        }
+        .zone-title {
+            position: absolute;
+            top: -10px; left: 20px;
+            background: #141414;
+            padding: 0 10px;
+            color: #b3b3b3;
+            font-size: 11px;
+            font-weight: bold;
+        }
+
+        /* --- NŒUDS (Nodes) --- */
+        .node {
+            position: absolute;
+            width: 140px; 
+            background-color: #2b2b2b;
+            border-radius: 12px;
+            border: 1px solid #444;
+            box-shadow: 0 8px 20px rgba(0,0,0,0.7);
+            z-index: 2;
+            display: flex;
+            flex-direction: column;
+            transition: transform 0.2s, border-color 0.2s, box-shadow 0.2s;
+            box-sizing: border-box;
+        }
+        
+        .clickable { cursor: pointer; border: 1px solid #555; }
+        .clickable:hover {
+            transform: scale(1.06); border-color: #fff; box-shadow: 0 0 25px rgba(255, 255, 255, 0.3); z-index: 5;
+        }
+
+        .node-header {
+            padding: 4px 8px; border-top-left-radius: 11px; border-top-right-radius: 11px;
+            font-size: 11.5px; font-weight: bold; color: #fff; display: flex; justify-content: space-between; align-items: center;
+        }
+        
+        .node-body {
+            padding: 6px 5px; font-size: 11px; color: #d1d5db; background-color: #1e1e1e;
+            border-bottom-left-radius: 11px; border-bottom-right-radius: 11px;
+            text-align: center; display: flex; align-items: center; justify-content: center; line-height: 1.25;
+        }
+
+        /* Formes arrondies spécifiques (Pilules) */
+        .pill-node { border-radius: 18px; }
+        .pill-node .node-header { border-radius: 17px 17px 0 0; padding-top: 6px; }
+        .pill-node .node-body { border-radius: 0 0 17px 17px; padding-bottom: 6px; }
+
+        /* Couleurs */
+        .header-blue { background: linear-gradient(90deg, #3b82f6, #1d4ed8); }
+        .header-purple { background: linear-gradient(90deg, #8b5cf6, #6d28d9); }
+        .header-orange { background: linear-gradient(90deg, #f59e0b, #b45309); }
+        .header-db { background: linear-gradient(90deg, #2563eb, #1e40af); }
+        .header-green { background: linear-gradient(90deg, #10b981, #047857); }
+        .header-grey { background: linear-gradient(90deg, #64748b, #475569); }
+        .header-red { background: linear-gradient(90deg, #ef4444, #b91c1c); } 
+        .header-pink { background: linear-gradient(90deg, #d946ef, #9333ea); } 
+
+        /* Sockets */
+        .socket {
+            position: absolute; width: 10px; height: 10px; border-radius: 50%;
+            border: 2px solid #2b2b2b; box-shadow: 0 0 5px rgba(0,0,0,0.5);
+        }
+        .socket.left { left: -6px; top: 50%; transform: translateY(-50%); }
+        .socket.right { right: -6px; top: 50%; transform: translateY(-50%); }
+        .socket.top { top: -6px; left: 50%; transform: translateX(-50%); }
+        .socket.bottom { bottom: -6px; left: 50%; transform: translateX(-50%); }
+
+        .socket-blue { background-color: #3b82f6; }
+        .socket-purple { background-color: #8b5cf6; }
+        .socket-orange { background-color: #f59e0b; }
+        .socket-db { background-color: #2563eb; }
+        .socket-green { background-color: #10b981; }
+        .socket-grey { background-color: #64748b; }
+        .socket-red { background-color: #ef4444; }
+        .socket-pink { background-color: #d946ef; }
+
+        /* Animation Clique */
+        .click-icon { font-size: 13px; animation: bounce 2s infinite; }
+        @keyframes bounce { 0%, 20%, 50%, 80%, 100% {transform: translateY(0);} 40% {transform: translateY(-4px);} 60% {transform: translateY(-2px);} }
+
+        /* --- MODALE (CARROUSEL) --- */
+        .modal {
+            display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(10, 10, 10, 0.95); z-index: 1000; justify-content: center; align-items: center; flex-direction: column; backdrop-filter: blur(5px);
+        }
+        .modal-content { position: relative; display: flex; flex-direction: column; align-items: center; max-width: 95%; max-height: 95%; }
+        .modal img { max-width: 100%; max-height: 82vh; border-radius: 8px; box-shadow: 0 10px 40px rgba(0,0,0,0.9); cursor: pointer; border: 1px solid #444; }
+        .close-btn { position: absolute; top: -35px; right: 0; color: #fff; font-size: 35px; cursor: pointer; opacity: 0.7; }
+        .close-btn:hover { opacity: 1; }
+        .hint { margin-top: 15px; color: #a3a3a3; font-size: 13px; background: #252526; padding: 6px 20px; border-radius: 20px; border: 1px solid #333; }
+        .dots-container { display: flex; gap: 8px; margin-top: 10px; }
+        .dot { width: 8px; height: 8px; background-color: #444; border-radius: 50%; }
+        .dot.active { background-color: #3b82f6; }
+    </style>
+</head>
+<body>
+
+    <!-- EN-TÊTE & NAVIGATION -->
+    <div class="header">
+        <div class="header-title">
+            <h1>Supervision & Architecture - AIGE</h1>
+            <p>Cliquez sur les nœuds animés pour ouvrir les interfaces. Utilisez les boutons pour basculer de vue.</p>
+        </div>
+        <div class="nav-buttons">
+            <button class="nav-btn active" id="btn-flux" onclick="switchView('flux')">Vue Fonctionnelle (Flux)</button>
+            <button class="nav-btn" id="btn-archi" onclick="switchView('archi')">Vue Architecture (Technique)</button>
+        </div>
+    </div>
+
+    <!-- ==========================================
+         VUE 1 : FLUX FONCTIONNEL (AÉRÉE)
+         ========================================== -->
+    <div class="workspace-wrapper" id="view-flux" style="display: flex;">
+        <div class="workspace">
+            <svg class="cables">
+                <!-- BV -> Condition -->
+                <path class="cable" stroke="#3b82f6" d="M 200 293 L 320 293" />
+                <!-- Condition -> Direct API (OUI) -->
+                <path class="cable" stroke="#8b5cf6" d="M 390 260 C 390 133, 495 133, 600 133" />
+                <text x="440" y="150" class="cable-text">OUI</text> 
+                <!-- Condition -> Save (NON) -->
+                <path class="cable" stroke="#8b5cf6" d="M 390 326 C 390 333, 495 333, 600 333" />
+                <text x="440" y="350" class="cable-text">NON</text> 
+                <!-- Transport -->
+                <path class="cable" stroke="#64748b" stroke-dasharray="6,6" d="M 670 366 L 670 460" />
+                <text x="680" y="415" class="cable-subtext">Transport Physique PV</text>
+                <!-- CLC -> Projection -->
+                <path class="cable" stroke="#f59e0b" d="M 740 493 L 880 493" />
+                <!-- Projection -> API -->
+                <path class="cable" stroke="#f59e0b" d="M 950 460 L 950 366" />
+                <!-- API -> DB -->
+                <path class="cable" stroke="#f59e0b" d="M 950 300 L 950 166" />
+                <!-- Direct API -> DB -->
+                <path class="cable" stroke="#3b82f6" d="M 740 133 L 880 133" />
+                <!-- DB -> Sorties -->
+                <path class="cable" stroke="#2563eb" d="M 1020 133 C 1070 133, 1070 73, 1120 73" />
+                <path class="cable" stroke="#2563eb" d="M 1020 133 C 1070 133, 1070 193, 1120 193" />
+                <path class="cable" stroke="#2563eb" d="M 1020 133 C 1070 133, 1070 313, 1120 313" />
+            </svg>
+
+            <!-- NŒUDS FLUX (Espacés sur toute la largeur de 1300px) -->
+            <div class="node clickable" style="top:260px; left:60px;" onclick="openModal('bv')">
+                <div class="node-header header-blue"><span>Bureau de Vote</span><span class="click-icon"></span></div>
+                <div class="node-body">Saisie sur Tablette<br>(Auth.)</div>
+                <div class="socket right socket-blue"></div>
+            </div>
+
+            <div class="node pill-node" style="top:260px; left:320px;">
+                <div class="socket left socket-purple"></div>
+                <div class="node-header header-purple"><span>Vérification</span></div>
+                <div class="node-body">Réseau Internet<br>disponible ?</div>
+                <div class="socket top socket-purple"></div><div class="socket bottom socket-purple"></div>
+            </div>
+
+            <div class="node" style="top:100px; left:600px;">
+                <div class="socket left socket-blue"></div>
+                <div class="node-header header-blue"><span>Tunnel Sécurisé</span></div>
+                <div class="node-body">Envoi direct API :<br>Voix puis Scan PV</div>
+                <div class="socket right socket-blue"></div>
+            </div>
+
+            <div class="node" style="top:300px; left:600px;">
+                <div class="socket left socket-grey"></div>
+                <div class="node-header header-grey"><span>Mode Hors Ligne</span></div>
+                <div class="node-body">Sauvegarde locale<br>chiffrée</div>
+                <div class="socket bottom socket-grey"></div>
+            </div>
+
+            <div class="node clickable" style="top:460px; left:600px;" onclick="openModal('clc')">
+                <div class="socket top socket-orange"></div>
+                <div class="node-header header-orange"><span>Espace CLC</span><span class="click-icon"></span></div>
+                <div class="node-body">Commission Locale<br>de Centralisation</div>
+                <div class="socket right socket-orange"></div>
+            </div>
+
+            <div class="node clickable" style="top:460px; left:880px;" onclick="openModal('clc')">
+                <div class="socket left socket-orange"></div>
+                <div class="node-header header-orange"><span>Validation</span><span class="click-icon"></span></div>
+                <div class="node-body">Projection publique<br>& PV de Secours</div>
+                <div class="socket top socket-orange"></div>
+            </div>
+
+            <div class="node" style="top:300px; left:880px;">
+                <div class="socket bottom socket-orange"></div>
+                <div class="node-header header-orange"><span>Tunnel Sécurisé</span></div>
+                <div class="node-body">Envoi différé API<br>& Tunnel Chiffré</div>
+                <div class="socket top socket-orange"></div>
+            </div>
+
+            <div class="node pill-node" style="top:100px; left:880px;">
+                <div class="socket left socket-db"></div><div class="socket bottom socket-db"></div>
+                <div class="node-header header-db"><span>Serveur AIGE</span></div>
+                <div class="node-body" style="font-weight:bold; color:#60a5fa;">Base de Données<br>Centrale</div>
+                <div class="socket right socket-db"></div>
+            </div>
+
+            <div class="node clickable" style="top:40px; left:1120px;" onclick="openModal('cnc')">
+                <div class="socket left socket-green"></div>
+                <div class="node-header header-green"><span>Audit & Sécurité</span><span class="click-icon"></span></div>
+                <div class="node-body">Supervision CNC<br>Contrôle Qualité</div>
+            </div>
+
+            <div class="node clickable" style="top:160px; left:1120px;" onclick="openModal('dashboard')">
+                <div class="socket left socket-green"></div>
+                <div class="node-header header-green"><span>Décisionnel</span><span class="click-icon"></span></div>
+                <div class="node-body">Dashboard AIGE<br>Pilotage</div>
+            </div>
+
+            <div class="node clickable" style="top:280px; left:1120px;" onclick="openModal('public')">
+                <div class="socket left socket-green"></div>
+                <div class="node-header header-green"><span>Transparence</span><span class="click-icon"></span></div>
+                <div class="node-body">Nuit Électorale<br>Presse & Public</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ==========================================
+         VUE 2 : ARCHITECTURE TECHNIQUE (Corrections des chevauchements)
+         ========================================== -->
+    <div class="workspace-wrapper" id="view-archi" style="display: none;">
+        <div class="workspace">
+            <!-- Zones d'arrière-plan redimensionnées -->
+            <div class="zone-box" style="left:10px; top:120px; width:180px; height:270px;">
+                <div class="zone-title">1. Déploiement Terrain</div>
+            </div>
+            <div class="zone-box" style="left:200px; top:120px; width:360px; height:270px;">
+                <div class="zone-title">2. Réseau & Sécurité</div>
+            </div>
+            <div class="zone-box" style="left:560px; top:120px; width:420px; height:270px;">
+                <div class="zone-title">3. Coeur du Système</div>
+            </div>
+            <div class="zone-box" style="left:1100px; top:20px; width:180px; height:470px;">
+                <div class="zone-title">4. Interfaces Sorties</div>
+            </div>
+
+            <svg class="cables">
+                <!-- Tablette -> Sécurité -->
+                <path class="cable" stroke="#ef4444" d="M 170 173 C 285 173, 285 258, 400 258" />
+                <text x="285" y="160" class="cable-text" fill="#ef4444" text-anchor="middle">API Asynchrone</text> 
+
+                <!-- Équipement Local -> Routeur -->
+                <path class="cable" stroke="#f59e0b" d="M 170 353 L 220 353" />
+                <text x="195" y="340" class="cable-subtext" text-anchor="middle">Connexion</text> 
+                <text x="195" y="350" class="cable-subtext" text-anchor="middle">Secours</text> 
+
+                <!-- Routeur -> Sécurité -->
+                <path class="cable" stroke="#ef4444" d="M 360 353 C 380 353, 380 258, 400 258" />
+                
+                <!-- Sécurité -> Backend -->
+                <path class="cable" stroke="#d946ef" d="M 540 258 L 580 258" />
+                
+                <!-- Backend -> Stockage (ESPACE CORRIGÉ) -->
+                <path class="cable" stroke="#2563eb" d="M 720 258 L 820 258" />
+                <!-- Texte centré exactement au milieu du câble (X=770) -->
+                <text x="770" y="240" class="cable-text" fill="#2563eb" text-anchor="middle">Requêtes</text> 
+                <text x="770" y="253" class="cable-text" fill="#2563eb" text-anchor="middle">Transactionnelles</text> 
+
+                <!-- Stockage -> Sorties -->
+                <path class="cable" stroke="#10b981" d="M 960 258 C 1040 258, 1040 83, 1120 83" />
+                <!-- Validation alignée à droite pour ne pas toucher le nœud Stockage -->
+                <text x="1100" y="106" class="cable-text" fill="#10b981" text-anchor="end">Validation Définitive</text> 
+
+                <!-- Stockage -> Supervision (DÉTECTION ANOMALIES CORRIGÉ) -->
+                <path class="cable" stroke="#10b981" d="M 960 258 L 1120 258" />
+                <!-- Texte centré exactement au milieu de l'espace de 160px (X=1040) -->
+                <text x="1040" y="248" class="cable-text" fill="#10b981" text-anchor="middle">Détection Anomalies</text> 
+
+                <path class="cable" stroke="#10b981" d="M 960 258 C 1040 258, 1040 433, 1120 433" />
+                <!-- Transparence alignée à droite -->
+                <text x="1100" y="421" class="cable-text" fill="#10b981" text-anchor="end">Transparence</text> 
+            </svg>
+
+            <!-- NŒUDS ARCHI (Décalés vers la gauche pour dégager un couloir vide à droite) -->
+            <div class="node clickable" style="top:140px; left:30px;" onclick="openModal('bv')">
+                <div class="node-header header-blue"><span>Tablettes</span><span class="click-icon"></span></div>
+                <div class="node-body">20 000 Tablettes<br>Mobiles</div>
+                <div class="socket right socket-blue"></div>
+            </div>
+
+            <div class="node clickable" style="top:320px; left:30px;" onclick="openModal('clc')">
+                <div class="node-header header-orange"><span>Équipement Local</span><span class="click-icon"></span></div>
+                <div class="node-body">159 CLC + Ambassades<br>(PC, Onduleur...)</div>
+                <div class="socket right socket-orange"></div>
+            </div>
+
+            <div class="node" style="top:320px; left:220px;">
+                <div class="socket left socket-orange"></div>
+                <div class="node-header header-orange"><span>Matériel Réseau</span></div>
+                <div class="node-body">Routeurs Avancés<br>MikroTik / Satellites</div>
+                <div class="socket right socket-orange"></div>
+            </div>
+
+            <div class="node" style="top:225px; left:400px;">
+                <div class="socket left socket-red"></div>
+                <div class="node-header header-red"><span>Sécurité</span></div>
+                <div class="node-body">Pare-feu CORS &<br>Auth JWT / Bcrypt</div>
+                <div class="socket right socket-red"></div>
+            </div>
+
+            <div class="node" style="top:225px; left:580px;">
+                <div class="socket left socket-pink"></div>
+                <div class="node-header header-pink"><span>Backend</span></div>
+                <div class="node-body">Serveur API REST<br>Node.js / Express</div>
+                <div class="socket right socket-pink"></div>
+            </div>
+
+            <!-- BDD arrêtée à gauche (X=820) pour libérer 160 pixels de vide avant les sorties -->
+            <div class="node pill-node" style="top:225px; left:820px;">
+                <div class="socket left socket-db"></div>
+                <div class="node-header header-db"><span>Stockage</span></div>
+                <div class="node-body" style="color: #60a5fa; font-weight: bold;">BDD MySQL<br>Connection Pooling<br>vote_id unique</div>
+                <div class="socket right socket-db"></div>
+            </div>
+
+            <div class="node clickable" style="top:50px; left:1120px;" onclick="openModal('dashboard')">
+                <div class="socket left socket-green"></div>
+                <div class="node-header header-green"><span>Dashboard</span><span class="click-icon"></span></div>
+                <div class="node-body">Dashboard Stratégique<br>Exports Automatisés</div>
+            </div>
+
+            <div class="node clickable" style="top:225px; left:1120px;" onclick="openModal('cnc')">
+                <div class="socket left socket-green"></div>
+                <div class="node-header header-green"><span>Supervision</span><span class="click-icon"></span></div>
+                <div class="node-body">Supervision CNC<br>Alertes & Corrections</div>
+            </div>
+
+            <div class="node clickable" style="top:400px; left:1120px;" onclick="openModal('public')">
+                <div class="socket left socket-green"></div>
+                <div class="node-header header-green"><span>Public</span><span class="click-icon"></span></div>
+                <div class="node-body">Nuit Électorale<br>Vues Agrégées</div>
+            </div>
+
+        </div>
+    </div>
+
+    <!-- ==========================================
+         MODALE (CARROUSEL UNIQUE)
+         ========================================== -->
+    <div class="modal" id="imageModal">
+        <div class="modal-content">
+            <span class="close-btn" onclick="closeModal()">×</span>
+            <img id="carouselImage" src="" alt="Aperçu Interface" onclick="nextImage()">
+            <div class="hint" id="hintText">Cliquez sur l'image pour voir l'étape suivante</div>
+            <div class="dots-container" id="dotsContainer"></div>
+        </div>
+    </div>
+
+    <script>
+        // Logique de basculement de Vue
+        function switchView(view) {
+            const vFlux = document.getElementById('view-flux');
+            const vArchi = document.getElementById('view-archi');
+            const btnFlux = document.getElementById('btn-flux');
+            const btnArchi = document.getElementById('btn-archi');
+
+            if(view === 'flux') {
+                vFlux.style.display = 'flex';
+                vArchi.style.display = 'none';
+                btnFlux.classList.add('active');
+                btnArchi.classList.remove('active');
+            } else {
+                vFlux.style.display = 'none';
+                vArchi.style.display = 'flex';
+                btnFlux.classList.remove('active');
+                btnArchi.classList.add('active');
+            }
+        }
+
+        const nodeData = {
+            'bv': ['login.png', 'saisie1.jpg', 'saisie2.jpg'],
+            'clc': ['clc.jpg', 'validation.jpg'],
+            'cnc': ['supervision.jpg', 'correction.jpg'],
+            'dashboard': ['cnc2.jpg'],
+            'public': ['nuit.jpg']
+        };
+
+        let currentImages = [];
+        let currentIndex = 0;
+
+        function openModal(nodeId) {
+            currentImages = nodeData[nodeId];
+            currentIndex = 0;
+            updateCarousel();
+            document.getElementById('imageModal').style.display = 'flex';
+        }
+
+        function closeModal() {
+            document.getElementById('imageModal').style.display = 'none';
+        }
+
+        function nextImage() {
+            currentIndex++;
+            if (currentIndex >= currentImages.length) {
+                currentIndex = 0;
+            }
+            updateCarousel();
+        }
+
+        function updateCarousel() {
+            const imgElement = document.getElementById('carouselImage');
+            const hintElement = document.getElementById('hintText');
+            const dotsContainer = document.getElementById('dotsContainer');
+            
+            const imgSrc = currentImages[currentIndex];
+            imgElement.src = imgSrc;
+            
+            imgElement.onerror = function() {
+                this.onerror = null;
+                this.src = "data:image/svg+xml;charset=UTF-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='600' height='400' viewBox='0 0 600 400'%3E%3Crect width='100%25' height='100%25' fill='%23222'/%3E%3Ctext x='50%25' y='50%25' dominant-baseline='middle' text-anchor='middle' font-family='sans-serif' font-size='18' fill='%23ff5555'%3EImage introuvable : " + encodeURIComponent(imgSrc) + "%3C/text%3E%3C/svg%3E";
+            };
+
+            if (currentImages.length > 1) {
+                hintElement.innerHTML = `Image ${currentIndex + 1} sur ${currentImages.length} — Cliquez sur l'image pour la suite`;
+                hintElement.style.display = "block";
+            } else {
+                hintElement.style.display = "none";
+            }
+
+            dotsContainer.innerHTML = '';
+            if (currentImages.length > 1) {
+                for (let i = 0; i < currentImages.length; i++) {
+                    const dot = document.createElement('div');
+                    dot.className = 'dot' + (i === currentIndex ? ' active' : '');
+                    dotsContainer.appendChild(dot);
+                }
+            }
+        }
+
+        window.onclick = function(event) {
+            const modal = document.getElementById('imageModal');
+            if (event.target == modal) {
+                closeModal();
+            }
+        }
+    </script>
+</body>
+</html>
